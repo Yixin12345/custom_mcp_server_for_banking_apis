@@ -1,13 +1,11 @@
 {
   "servers": {
     "new_api_mcp": {
-      "command": "uv",
-      "args": [
-        "--directory",
-        "C:\\Users\\yashp\\OneDrive\\Documents\\Phani\\new_mcp\\new_api_mcp",
-        "run",
-        "main.py"
-      ]
+      "url": "https://new-api-mcp.onrender.com/mcp/",
+      "type": "http",
+      "headers": {
+        "Authorization": "Bearer 7Hd5rJ/%b^$QM7tretGmdWS8qsK%D^C$#a@jealGh3$="
+      }
     }
   }
 }

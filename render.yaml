@@ -1,0 +1,13 @@
+services:
+  - type: web
+    name: new-api-mcp
+    env: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn asgi:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
+    envVars:
+      - key: MCP_TRANSPORT
+        value: streamable-http
+      - key: MCP_DISABLE_DNS_REBINDING_PROTECTION
+        value: "true"

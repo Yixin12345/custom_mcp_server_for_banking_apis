@@ -1,0 +1,12 @@
+{
+	"servers": {
+		"mcp-banking-data": {
+			"url": "https://new-api-mcp.onrender.com/mcp/",
+			"type": "http",
+			"headers": {
+				"Authorization": "Bearer 7Hd5rJ/%b^$QM7tretGmdWS8qsK%D^C$#a@jealGh3$="
+			}
+		}
+	},
+	"inputs": []
+}
