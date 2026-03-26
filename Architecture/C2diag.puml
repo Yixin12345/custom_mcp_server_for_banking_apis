@@ -1,0 +1,111 @@
+@startuml
+title Level 2: Internal Component Architecture
+
+skinparam {
+  linetype ortho
+  nodesep 80
+  ranksep 160
+}
+
+rectangle "LAYER 1: Startup" {
+  [main.py] as main
+  [asgi.py] as asgi
+}
+
+rectangle "LAYER 2: Security & Observability" {
+  [Auth Middleware] as auth
+  [Langfuse] as obs
+}
+
+rectangle "LAYER 3: MCP Server" {
+  [FastMCP Server] as mcp_srv
+  [/mcp endpoint] as mcp_ep
+}
+
+rectangle "LAYER 4: Tools" {
+  [create_customer] as t1
+  [get_customer] as t2
+  [list_customers] as t3
+  [create_account] as t4
+  [run_tests] as t5
+}
+
+rectangle "LAYER 5: HTTP Client" {
+  [httpx client] as http
+  [Maven Runner] as maven
+}
+
+rectangle "LAYER 6: FastAPI" {
+  [app.py] as app
+  [config.py] as cfg
+  [models.py] as mod
+}
+
+rectangle "LAYER 7: REST" {
+  [/api/v1/customers] as rest1
+  [/api/v1/customers/{id}/accounts] as rest2
+  [/health] as health
+}
+
+rectangle "LAYER 8: Storage" {
+  database [customer_store] as store1
+  database [accounts_db] as store2
+}
+
+ 
+main -[hidden]right-> asgi
+auth -[hidden]right-> obs
+mcp_srv -[hidden]right-> mcp_ep
+t1 -[hidden]right-> t2
+t2 -[hidden]right-> t3
+t3 -[hidden]right-> t4
+t4 -[hidden]right-> t5
+http -[hidden]right-> maven
+app -[hidden]right-> cfg
+cfg -[hidden]right-> mod
+rest1 -[hidden]right-> rest2
+rest2 -[hidden]right-> health
+store1 -[hidden]right-> store2
+
+' === VERTICAL FLOW ===
+main -down-> mcp_srv : initialize
+asgi -down-> auth : apply
+asgi -down-> app : mount
+
+auth -down-> mcp_ep : protect
+mcp_srv -down-> mcp_ep : expose
+
+mcp_srv -down-> t1 : register
+mcp_srv -down-> t2 : register
+mcp_srv -down-> t3 : register
+mcp_srv -down-> t4 : register
+mcp_srv -down-> t5 : register
+
+t1 -down-> http : POST
+t2 -down-> http : GET
+t3 -down-> http : GET
+t4 -down-> http : POST
+t5 -down-> maven : execute
+
+http -down-> rest1 : forward
+http -down-> rest2 : forward
+
+app -down-> rest1 : mount
+app -down-> rest2 : mount
+app -down-> health : mount
+
+rest1 -down-> store1 : CRUD
+rest2 -down-> store2 : CRUD
+
+' === HORIZONTAL DEPENDENCIES ===
+t1 -right-> obs : trace
+t2 -right-> obs : trace
+t3 -right-> obs : trace
+t4 -right-> obs : trace
+
+app -right-> cfg : load
+app -right-> mod : use
+
+rest1 -right-> mod : validate
+rest2 -right-> mod : validate
+@enduml

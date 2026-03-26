@@ -1,0 +1,61 @@
+@startuml
+title MCP Banking API - Activity Flow
+
+start
+
+:AI Agent sends MCP request;
+
+:Request arrives at /mcp endpoint;
+
+if (Auth Token Valid?) then (yes)
+  :FastMCP Server receives request;
+  
+  :Identify tool to execute;
+  
+  fork
+    :Log to Langfuse (start);
+  fork again
+    :Execute tool logic;
+  end fork
+  
+  if (Tool = run_tests?) then (yes)
+    :Execute Maven subprocess;
+    :Return test results;
+  else (banking tool)
+    :Prepare httpx request;
+    :Call internal REST API\n(localhost);
+    
+    :REST endpoint receives request;
+    
+    :Validate with Pydantic models;
+    
+    if (Validation passed?) then (yes)
+      :Execute business logic;
+      
+      :Access in-memory storage;
+      
+      :Return success response;
+    else (no)
+      :Return validation error;
+      stop
+    endif
+  endif
+  
+  fork
+    :Log to Langfuse (complete);
+  fork again
+    :Return result to MCP server;
+  end fork
+  
+  :Format MCP response;
+  
+  :Send response to AI Agent;
+  
+else (no)
+  :Return 401 Unauthorized;
+  stop
+endif
+
+stop
+
+@enduml
