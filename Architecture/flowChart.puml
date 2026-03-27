@@ -3,59 +3,62 @@ title MCP Banking API - Activity Flow
 
 start
 
-:AI Agent sends MCP request;
+:AI Agent sends POST /mcp request;
 
-:Request arrives at /mcp endpoint;
+:ASGI receives request at /mcp endpoint;
 
-if (Auth Token Valid?) then (yes)
-  :FastMCP Server receives request;
-  
-  :Identify tool to execute;
-  
-  fork
-    :Log to Langfuse (start);
-  fork again
-    :Execute tool logic;
-  end fork
-  
-  if (Tool = run_tests?) then (yes)
-    :Execute Maven subprocess;
-    :Return test results;
-  else (banking tool)
-    :Prepare httpx request;
-    :Call internal REST API\n(localhost);
-    
-    :REST endpoint receives request;
-    
-    :Validate with Pydantic models;
-    
-    if (Validation passed?) then (yes)
-      :Execute business logic;
-      
-      :Access in-memory storage;
-      
-      :Return success response;
-    else (no)
-      :Return validation error;
-      stop
-    endif
+if (MCP_AUTH_TOKEN configured?) then (yes)
+  if (Authorization header valid?) then (yes)
+    :MCPAuthMiddleware authorizes request;
+  else (no)
+    :Return 401 Unauthorized;
+    stop
   endif
-  
-  fork
-    :Log to Langfuse (complete);
-  fork again
-    :Return result to MCP server;
-  end fork
-  
-  :Format MCP response;
-  
-  :Send response to AI Agent;
-  
 else (no)
-  :Return 401 Unauthorized;
-  stop
+  :Skip authentication;
 endif
 
-stop
+:FastMCP HTTP handler processes request;
 
+:Identify and dispatch requested tool;
+
+fork
+  :Start Langfuse trace observation;
+fork again
+  :Execute tool handler;
+end fork
+
+note right
+  Tool execution diverges here
+  based on which tool was requested
+end note
+
+partition "Tool-Specific Execution" {
+  if (Tool = run_automation_maven_tests?) then (yes)
+    :Resolve Maven command path;
+    :Resolve test suite path;
+    :Execute Maven subprocess\nin automation_mvn_tests/ directory;
+    :Capture stdout/stderr output;
+    :Parse test reports;
+    :Format results as JSON;
+  else (no - banking tools)
+    :Build httpx request;
+    :Determine target endpoint\n(/api/v1/customers or\n/api/v1/customers/{id}/accounts);
+    :Send HTTP request to\nlocal FastAPI server;
+    :Receive HTTP response;
+    :Extract response data;
+  endif
+}
+
+:Tool returns result;
+
+fork
+  :Complete Langfuse observation;
+fork again
+  :Format tool result for MCP protocol;
+end fork
+
+:Return JSON response to AI Agent;
+
+stop
 @enduml

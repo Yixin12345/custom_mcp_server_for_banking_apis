@@ -1,0 +1,78 @@
+@startuml
+title Level 1: System Context - MCP Banking API
+
+skinparam {
+  ActorBackgroundColor #3498DB
+  ActorBorderColor #2980B9
+  ComponentBackgroundColor #ECF0F1
+  ComponentBorderColor #34495E
+  CloudBackgroundColor #F9E79F
+  CloudBorderColor #F39C12
+  StorageBackgroundColor #D5F4E6
+  StorageBorderColor #27AE60
+  ArrowThickness 2
+  linetype ortho
+  
+  Padding 20
+  BoxPadding 30
+  nodesep 90
+  ranksep 100
+}
+
+actor " AI Agent\n(Claude, ChatGPT)" as AI
+actor " Human User\n(Mobile/Web App)" as USER
+
+package "MCP Banking API Server" as SERVER {
+  component "MCP Protocol\n/mcp" as MCP #5DADE2
+  component "REST API\n/api/v1/*" as API #52BE80
+  component "Health Check\n/health" as HEALTH #82E0AA
+}
+
+cloud " Langfuse\nObservability Platform" as OBS
+database " In-Memory\nData Stores" as STORAGE
+
+' Espacement horizontal
+MCP -[hidden]right-> API
+API -[hidden]right-> HEALTH
+
+AI -down-> MCP : <b>POST /mcp</b>\nMCP tool invocations
+
+USER -down-> API : <b>GET/POST</b>\nCustomer & Account operations
+USER -down-> HEALTH : <b>GET /health</b>\nSystem status
+
+MCP -right-> OBS : Telemetry & traces\n(PII redacted)
+MCP -down-> API : Some tool flows via internal httpx calls\n(localhost)
+API -down-> STORAGE : CRUD operations\n(customers, accounts)
+
+note right of MCP #FFF9E6
+  <b>MCP Layer Components:</b>
+  • Tool metadata: <i>mcp.json</i>
+  • Tool handlers: <i>main.py</i>
+  • FastMCP server
+  • Auth middleware (MCP_AUTH_TOKEN)
+  • Internal native tool: <i>run_automation_maven_tests</i>
+end note
+
+note left of API #E8F8F5
+  <b>REST API Components:</b>
+  • FastAPI app: <i>fastapi_app/app.py</i>
+  • Pydantic schemas: <i>models.py</i>
+  • Configuration: <i>config.py</i>
+  • Endpoints: customers, accounts, health
+end note
+
+note bottom of STORAGE #D5F4E6
+  <b>Storage:</b>
+  • customer_store (in-memory dict)
+  • mock_accounts_db (in-memory dict)
+  • Production: PostgreSQL/MySQL
+end note
+
+legend right
+  |= Component |= Technology |
+  | MCP Server | FastMCP + Python |
+  | REST API | FastAPI + Pydantic |
+  | Observability | Langfuse |
+  | Storage | In-Memory (demo) |
+endlegend
+@enduml
