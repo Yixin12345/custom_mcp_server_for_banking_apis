@@ -46,14 +46,16 @@ public class LoginPage {
     }
 
     public String getMyAccountPageTitle(){
-        //        return page_title.equals(expectedPageTitle);
         WebDriverWait wait = new WebDriverWait(driver, Duration.ofSeconds(10));
-        WebElement titleName = wait.until(ExpectedConditions.presenceOfElementLocated(MyAccountPageTitle));
-        return titleName.getText();
+        WebElement titleName = wait.until(ExpectedConditions.visibilityOfElementLocated(MyAccountPageTitle));
+        String text = titleName.getText().trim();
+        return text.isEmpty() ? titleName.getAttribute("title") : text;
     }
 
     public String validateLoginError(){
-        return driver.findElement(loginErrorMessage).getText();
+        WebDriverWait wait = new WebDriverWait(driver, Duration.ofSeconds(10));
+        WebElement error = wait.until(ExpectedConditions.visibilityOfElementLocated(loginErrorMessage));
+        return error.getText();
     }
 
     public void clickForgottenPasswordLink(){

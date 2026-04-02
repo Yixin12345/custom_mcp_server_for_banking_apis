@@ -18,9 +18,9 @@ Feature: Login functionality for e-Commerce website OPENCART
     Then I should see an error message indicating '<error_message>'
 
     Examples:
-    | username  | password    | error_message                                         |
-    | yashpal   | abc@123     | Warning: No match for E-Mail Address and/or Password  |
-    | ysharma   | invalid     | Warning: No match for E-Mail Address and/or Password  |
+    | username              | password    | error_message                                         |
+    | yashpal@test.com      | abc@123     | Warning: No match for E-Mail Address and/or Password  |
+    | ysharma@invalid.com   | invalid     | Warning: No match for E-Mail Address and/or Password  |
 
   Scenario: Navigating to the forgotten password page
     When I click on the Forgotten Password link
