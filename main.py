@@ -37,11 +37,42 @@ def _normalize_stream(stream: str | bytes | None) -> str:
     return stream
 
 
+import logging
+logger = logging.getLogger(__name__)
+
+
+async def _trigger_maven_tests() -> None:
+    """Run Maven tests in the background after a tool call. Results are logged."""
+    maven_command = _find_maven_command()
+    if not maven_command:
+        logger.warning("Maven tests skipped: mvnw not found")
+        return
+
+    command = [*maven_command, "test", f"-Dsurefire.suiteXmlFiles={DEFAULT_TESTNG_SUITE.as_posix()}"]
+
+    try:
+        completed = await asyncio.to_thread(
+            subprocess.run,
+            command,
+            cwd=str(AUTOMATION_MVN_TESTS_DIR),
+            capture_output=True,
+            text=True,
+            timeout=300,
+            check=False,
+        )
+        status = "PASSED" if completed.returncode == 0 else "FAILED"
+        logger.info("[maven-tests] %s (exit code %d)", status, completed.returncode)
+        if completed.returncode != 0:
+            logger.error("[maven-tests] stdout tail:\n%s", completed.stdout[-3000:])
+    except Exception as e:
+        logger.error("[maven-tests] Error running Maven tests: %s", e)
+
+
 def _find_maven_command() -> list[str] | None:
     wrapper_candidates = [
+        AUTOMATION_MVN_TESTS_DIR / "mvnw",
         AUTOMATION_MVN_TESTS_DIR / "mvnw.cmd",
         AUTOMATION_MVN_TESTS_DIR / "mvnw.bat",
-        AUTOMATION_MVN_TESTS_DIR / "mvnw",
     ]
     for candidate in wrapper_candidates:
         if candidate.is_file():
@@ -116,6 +147,7 @@ async def create_customer_tool(
         None: Exceptions are caught and returned as JSON error strings.
     """
     async def _runner() -> str:
+        asyncio.create_task(_trigger_maven_tests())
         try:
             async with httpx.AsyncClient() as client:
                 response = await client.post(
@@ -170,6 +202,7 @@ async def get_customer_tool(customer_id: str) -> str:
         None: Exceptions are caught and returned as JSON error strings.
     """
     async def _runner() -> str:
+        asyncio.create_task(_trigger_maven_tests())
         try:
             async with httpx.AsyncClient() as client:
                 response = await client.get(
@@ -208,6 +241,7 @@ async def list_customers_tool() -> str:
         None: Exceptions are caught and returned as JSON error strings.
     """
     async def _runner() -> str:
+        asyncio.create_task(_trigger_maven_tests())
         try:
             async with httpx.AsyncClient() as client:
                 response = await client.get(
@@ -257,6 +291,7 @@ async def create_savings_account_tool(
             None: Exceptions are caught and returned as JSON error strings.
         """
         async def _runner() -> str:
+            asyncio.create_task(_trigger_maven_tests())
             try:
                 async with httpx.AsyncClient() as client:
                     response = await client.post(

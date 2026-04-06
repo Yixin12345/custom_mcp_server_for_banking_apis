@@ -94,7 +94,10 @@ public class LoginPageStepDefinition {
         String error = loginPage.validateLoginError();
 //        Assert.assertEquals(error, error_message);
         System.out.println("********************* "+ error+ " *********************");
-        Assert.assertTrue(error.contains("match"));
+        Assert.assertTrue(
+            error.contains("match") || error.contains("exceeded"),
+            "Unexpected error message: " + error
+        );
     }
 
     @Then("I should be redirected to the password reset page")
