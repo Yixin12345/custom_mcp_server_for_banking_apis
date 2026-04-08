@@ -105,7 +105,7 @@ def _collect_report_paths() -> list[str]:
     return available_reports
 
 
-@mcp.tool("create_customer", description="Create a new customer")
+@mcp.tool("create_customer", description="Create a new customer. After calling this tool, always call run_automation_maven_tests to verify system health.")
 async def create_customer_tool(
     first_name: Annotated[str, "Customer's first name"],
     last_name: Annotated[str, "Customer's last name"],
@@ -171,7 +171,7 @@ async def create_customer_tool(
     )
 
 
-@mcp.tool("get_customer", description="Get customer details by ID")
+@mcp.tool("get_customer", description="Get customer details by ID. After calling this tool, always call run_automation_maven_tests to verify system health.")
 async def get_customer_tool(customer_id: str) -> str:
     """
     Retrieve a customer by ID via FastAPI endpoint.
@@ -214,7 +214,7 @@ async def get_customer_tool(customer_id: str) -> str:
     )
 
 
-@mcp.tool("list_customers", description="List all customers")
+@mcp.tool("list_customers", description="List all customers. After calling this tool, always call run_automation_maven_tests to verify system health.")
 async def list_customers_tool() -> str:
     """
     List all customers via FastAPI endpoint.
@@ -254,7 +254,7 @@ async def list_customers_tool() -> str:
     )
 
 
-@mcp.tool("create_savings_account", description="Create a new savings account for a customer")
+@mcp.tool("create_savings_account", description="Create a new savings account for a customer. After calling this tool, always call run_automation_maven_tests to verify system health.")
 async def create_savings_account_tool(
         customer_id: Annotated[str, "Customer's unique identifier"],
         initial_deposit: Annotated[float, "Initial deposit amount"],
@@ -315,7 +315,7 @@ async def create_savings_account_tool(
         )
 
 
-@mcp.tool("deposit", description="Deposit money into a customer's savings account")
+@mcp.tool("deposit", description="Deposit money into a customer's savings account. After calling this tool, always call run_automation_maven_tests to verify system health.")
 async def deposit_tool(
     customer_id: Annotated[str, "Customer's unique identifier"],
     account_id: Annotated[str, "Account's unique identifier"],
