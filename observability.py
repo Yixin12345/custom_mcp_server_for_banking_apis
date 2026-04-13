@@ -97,6 +97,8 @@ class MCPObservability:
                 level="ERROR",
             )
             raise
+        finally:
+            self.client.flush()
 
     def shutdown(self) -> None:
         """Flush and shutdown Langfuse client."""
