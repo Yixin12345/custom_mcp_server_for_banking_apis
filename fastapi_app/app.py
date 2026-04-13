@@ -218,7 +218,7 @@ async def create_savings_account(customer_id: str, payload: CreateSavingsAccount
     mock_accounts_db[account_id] = {
         "customer_id": customer_id,
         "account_type": payload.account_type,
-        "initial_deposit": payload.initial_deposit,
+        "balance": payload.initial_deposit,
         "currency": payload.currency,
         "account_number": account_number
     }
@@ -229,6 +229,45 @@ async def create_savings_account(customer_id: str, payload: CreateSavingsAccount
         message="Savings account created successfully"
     )
 
+
+class DepositRequest(BaseModel):
+    amount: float = Field(..., example=100.00)
+
+    @validator("amount")
+    def validate_amount(cls, v):
+        if v <= 0:
+            raise ValueError("Deposit amount must be positive")
+        return v
+
+
+class DepositResponse(BaseModel):
+    account_id: str
+    new_balance: float
+    currency: str
+    message: str
+
+
+@app.post(
+    f"{settings.api_prefix}/customers/{{customer_id}}/accounts/{{account_id}}/deposit",
+    response_model=DepositResponse,
+    summary="Deposit money into a savings account",
+    tags=["Accounts"],
+)
+async def deposit(customer_id: str, account_id: str, payload: DepositRequest) -> DepositResponse:
+    if customer_id not in customer_store:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Customer {customer_id} not found")
+    if account_id not in mock_accounts_db:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Account {account_id} not found")
+    account = mock_accounts_db[account_id]
+    if account["customer_id"] != customer_id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Account does not belong to this customer")
+    account["balance"] += payload.amount
+    return DepositResponse(
+        account_id=account_id,
+        new_balance=account["balance"],
+        currency=account["currency"],
+        message=f"Successfully deposited {payload.amount} {account['currency']}",
+    )
 
 
 @app.exception_handler(Exception)

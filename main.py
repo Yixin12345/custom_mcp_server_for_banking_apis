@@ -9,14 +9,22 @@ import subprocess
 import time
 from typing import Annotated
 
-import httpx
+from fastapi import HTTPException
 from mcp.server.fastmcp import FastMCP
 from observability import telemetry
+from fastapi_app.app import (
+    create_customer as _fastapi_create_customer,
+    get_customer as _fastapi_get_customer,
+    list_customers as _fastapi_list_customers,
+    create_savings_account as _fastapi_create_savings_account,
+    deposit as _fastapi_deposit,
+    CreateSavingsAccountRequest,
+    DepositRequest,
+)
+from fastapi_app.models import CustomerRequest
 
 # Initialize FastMCP server
 mcp = FastMCP("new_api_mcp", stateless_http=True, json_response=True)
-
-base_url: str = os.getenv("BASE_API_URL", f"http://127.0.0.1:{os.getenv('PORT', '8000')}")
 PROJECT_ROOT = Path(__file__).resolve().parent
 AUTOMATION_MVN_TESTS_DIR = PROJECT_ROOT / "automation_mvn_tests"
 DEFAULT_TESTNG_SUITE = Path("src/test/resources/testng.xml")
@@ -41,20 +49,6 @@ import logging
 logger = logging.getLogger(__name__)
 
 
-
-async def _run_with_maven_tests(banking_coro) -> str:
-    """Run a banking operation and run_automation_maven_tests_tool in parallel."""
-    banking_result, test_result = await asyncio.gather(
-        banking_coro,
-        run_automation_maven_tests_tool(),
-    )
-    return json.dumps(
-        {
-            "result": json.loads(banking_result),
-            "maven_tests": json.loads(test_result),
-        },
-        indent=2,
-    )
 
 
 def _find_maven_command() -> list[str] | None:
@@ -136,27 +130,19 @@ async def create_customer_tool(
         None: Exceptions are caught and returned as JSON error strings.
     """
     async def _runner() -> str:
-        async def _op() -> str:
-            try:
-                async with httpx.AsyncClient() as client:
-                    response = await client.post(
-                        f"{base_url}/api/v1/customers",
-                        json={
-                            "first_name": first_name,
-                            "last_name": last_name,
-                            "date_of_birth": date_of_birth,
-                            "ssn": ssn,
-                            "gender": gender,
-                        },
-                        timeout=10.0,
-                    )
-                    response.raise_for_status()
-                    return json.dumps(response.json(), indent=2)
-            except httpx.HTTPStatusError as e:
-                return json.dumps({"error": f"HTTP {e.response.status_code}", "details": e.response.text}, indent=2)
-            except Exception as e:
-                return json.dumps({"error": "Failed to create customer", "details": str(e)}, indent=2)
-        return await _run_with_maven_tests(_op())
+        try:
+            result = await _fastapi_create_customer(CustomerRequest(
+                first_name=first_name,
+                last_name=last_name,
+                date_of_birth=date_of_birth,
+                ssn=ssn,
+                gender=gender,
+            ))
+            return json.dumps(result.model_dump(mode="json"), indent=2)
+        except HTTPException as e:
+            return json.dumps({"error": f"HTTP {e.status_code}", "details": e.detail}, indent=2)
+        except Exception as e:
+            return json.dumps({"error": "Failed to create customer", "details": str(e)}, indent=2)
 
     return await telemetry.observe_tool_call(
         tool_name="create_customer",
@@ -192,20 +178,13 @@ async def get_customer_tool(customer_id: str) -> str:
         None: Exceptions are caught and returned as JSON error strings.
     """
     async def _runner() -> str:
-        async def _op() -> str:
-            try:
-                async with httpx.AsyncClient() as client:
-                    response = await client.get(
-                        f"{base_url}/api/v1/customers/{customer_id}",
-                        timeout=10.0,
-                    )
-                    response.raise_for_status()
-                    return json.dumps(response.json(), indent=2)
-            except httpx.HTTPStatusError as e:
-                return json.dumps({"error": f"HTTP {e.response.status_code}", "details": e.response.text}, indent=2)
-            except Exception as e:
-                return json.dumps({"error": "Failed to get customer", "details": str(e)}, indent=2)
-        return await _run_with_maven_tests(_op())
+        try:
+            result = await _fastapi_get_customer(customer_id)
+            return json.dumps(result.model_dump(mode="json"), indent=2)
+        except HTTPException as e:
+            return json.dumps({"error": f"HTTP {e.status_code}", "details": e.detail}, indent=2)
+        except Exception as e:
+            return json.dumps({"error": "Failed to get customer", "details": str(e)}, indent=2)
 
     return await telemetry.observe_tool_call(
         tool_name="get_customer",
@@ -232,20 +211,11 @@ async def list_customers_tool() -> str:
         None: Exceptions are caught and returned as JSON error strings.
     """
     async def _runner() -> str:
-        async def _op() -> str:
-            try:
-                async with httpx.AsyncClient() as client:
-                    response = await client.get(
-                        f"{base_url}/api/v1/customers",
-                        timeout=10.0,
-                    )
-                    response.raise_for_status()
-                    return json.dumps(response.json(), indent=2)
-            except httpx.HTTPStatusError as e:
-                return json.dumps({"error": f"HTTP {e.response.status_code}", "details": e.response.text}, indent=2)
-            except Exception as e:
-                return json.dumps({"error": "Failed to list customers", "details": str(e)}, indent=2)
-        return await _run_with_maven_tests(_op())
+        try:
+            results = await _fastapi_list_customers()
+            return json.dumps([r.model_dump(mode="json") for r in results], indent=2)
+        except Exception as e:
+            return json.dumps({"error": "Failed to list customers", "details": str(e)}, indent=2)
 
     return await telemetry.observe_tool_call(
         tool_name="list_customers",
@@ -283,25 +253,20 @@ async def create_savings_account_tool(
             None: Exceptions are caught and returned as JSON error strings.
         """
         async def _runner() -> str:
-            async def _op() -> str:
-                try:
-                    async with httpx.AsyncClient() as client:
-                        response = await client.post(
-                            f"{base_url}/api/v1/customers/{customer_id}/accounts",
-                            json={
-                                "account_type": account_type,
-                                "initial_deposit": initial_deposit,
-                                "currency": currency
-                            },
-                            timeout=10.0,
-                        )
-                        response.raise_for_status()
-                        return json.dumps(response.json(), indent=2)
-                except httpx.HTTPStatusError as e:
-                    return json.dumps({"error": f"HTTP {e.response.status_code}", "details": e.response.text}, indent=2)
-                except Exception as e:
-                    return json.dumps({"error": "Failed to create savings account", "details": str(e)}, indent=2)
-            return await _run_with_maven_tests(_op())
+            try:
+                result = await _fastapi_create_savings_account(
+                    customer_id,
+                    CreateSavingsAccountRequest(
+                        account_type=account_type,
+                        initial_deposit=initial_deposit,
+                        currency=currency,
+                    ),
+                )
+                return json.dumps(result.model_dump(mode="json"), indent=2)
+            except HTTPException as e:
+                return json.dumps({"error": f"HTTP {e.status_code}", "details": e.detail}, indent=2)
+            except Exception as e:
+                return json.dumps({"error": "Failed to create savings account", "details": str(e)}, indent=2)
 
         return await telemetry.observe_tool_call(
             tool_name="create_savings_account",
@@ -322,21 +287,13 @@ async def deposit_tool(
     amount: Annotated[float, "Amount to deposit (must be positive)"],
 ) -> str:
     async def _runner() -> str:
-        async def _op() -> str:
-            try:
-                async with httpx.AsyncClient() as client:
-                    response = await client.post(
-                        f"{base_url}/api/v1/customers/{customer_id}/accounts/{account_id}/deposit",
-                        json={"amount": amount},
-                        timeout=10.0,
-                    )
-                    response.raise_for_status()
-                    return json.dumps(response.json(), indent=2)
-            except httpx.HTTPStatusError as e:
-                return json.dumps({"error": f"HTTP {e.response.status_code}", "details": e.response.text}, indent=2)
-            except Exception as e:
-                return json.dumps({"error": "Failed to deposit", "details": str(e)}, indent=2)
-        return await _run_with_maven_tests(_op())
+        try:
+            result = await _fastapi_deposit(customer_id, account_id, DepositRequest(amount=amount))
+            return json.dumps(result.model_dump(mode="json"), indent=2)
+        except HTTPException as e:
+            return json.dumps({"error": f"HTTP {e.status_code}", "details": e.detail}, indent=2)
+        except Exception as e:
+            return json.dumps({"error": "Failed to deposit", "details": str(e)}, indent=2)
 
     return await telemetry.observe_tool_call(
         tool_name="deposit",
@@ -355,6 +312,30 @@ async def run_automation_maven_tests_tool(
     max_output_chars: Annotated[int, "Max stdout/stderr chars to return"] = 8000,
 ) -> str:
     """Execute Maven automation tests and return structured results."""
+    return await telemetry.observe_tool_call(
+        tool_name="run_automation_maven_tests",
+        tool_input={
+            "maven_goal": maven_goal,
+            "clean_first": clean_first,
+            "testng_suite": testng_suite,
+            "cucumber_tags": cucumber_tags,
+            "timeout_seconds": timeout_seconds,
+            "max_output_chars": max_output_chars,
+        },
+        runner=lambda: _run_automation_maven_tests(
+            maven_goal, clean_first, testng_suite, cucumber_tags, timeout_seconds, max_output_chars
+        ),
+    )
+
+
+async def _run_automation_maven_tests(
+    maven_goal: str,
+    clean_first: bool,
+    testng_suite: str,
+    cucumber_tags: str,
+    timeout_seconds: int,
+    max_output_chars: int,
+) -> str:
     if not AUTOMATION_MVN_TESTS_DIR.is_dir():
         return json.dumps(
             {
