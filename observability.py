@@ -70,34 +70,33 @@ class MCPObservability:
 
         sanitized_input = self._sanitize(tool_input)
         started = time.perf_counter()
-
-        trace = self.client.trace(
-            name=f"mcp.tool.{tool_name}",
-            input=sanitized_input,
-            metadata={"component": "mcp_server", "tool": tool_name},
-        )
-        span = trace.span(
-            name=f"mcp.tool.{tool_name}",
-            input=sanitized_input,
-        )
         try:
-            result = await runner()
-            duration_ms = round((time.perf_counter() - started) * 1000, 2)
-            span.end(
-                output=self._trim_output(result),
-                metadata={"tool": tool_name, "duration_ms": duration_ms},
-            )
-            return result
+            with self.client.start_as_current_observation(
+                name=f"mcp.tool.{tool_name}",
+                input=sanitized_input,
+                metadata={"component": "mcp_server", "tool": tool_name},
+            ):
+                result = await runner()
+                self.client.create_event(
+                    name="mcp.tool.result",
+                    output=self._trim_output(result),
+                    metadata={
+                        "tool": tool_name,
+                        "duration_ms": round((time.perf_counter() - started) * 1000, 2),
+                    },
+                )
+                return result
         except Exception as exc:
-            duration_ms = round((time.perf_counter() - started) * 1000, 2)
-            span.end(
+            self.client.create_event(
+                name="mcp.tool.error",
                 output={"error": str(exc)},
+                metadata={
+                    "tool": tool_name,
+                    "duration_ms": round((time.perf_counter() - started) * 1000, 2),
+                },
                 level="ERROR",
-                metadata={"tool": tool_name, "duration_ms": duration_ms},
             )
             raise
-        finally:
-            self.client.flush()
 
     def shutdown(self) -> None:
         """Flush and shutdown Langfuse client."""
