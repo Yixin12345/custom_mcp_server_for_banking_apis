@@ -1,21 +1,25 @@
-services:
-  - type: web
-    name: new-api-mcp
-    env: python
-    plan: free
-    buildCommand: >-
-      apt-get update -q &&
-      apt-get install -y openjdk-21-jdk wget gnupg ca-certificates &&
-      wget -q -O /tmp/chrome.deb https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb &&
-      apt-get install -y /tmp/chrome.deb &&
-      cd automation_mvn_tests && ./mvnw test && cd .. &&
-      pip install -r requirements.txt
-    startCommand: uvicorn asgi:app --host 0.0.0.0 --port $PORT
-    healthCheckPath: /health
-    envVars:
-      - key: MCP_TRANSPORT
-        value: streamable-http
-      - key: MCP_DISABLE_DNS_REBINDING_PROTECTION
-        value: "true"
-      - key: JAVA_HOME
-        value: /usr/lib/jvm/java-21-openjdk-amd64
+services:       
+    - type: web
+      name: new-api-mcp
+      env: python                                                                                                                
+      plan: free
+      buildCommand: >-                                                                                                           
+        apt-get update -q &&
+        apt-get install -y openjdk-21-jdk wget gnupg ca-certificates &&
+        export JAVA_HOME=/usr/lib/jvm/java-21-openjdk-amd64 &&
+        export PATH=$JAVA_HOME/bin:$PATH &&                                                                                      
+        wget -q -O /tmp/chrome.deb https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb &&
+        apt-get install -y /tmp/chrome.deb &&                                                                                    
+        pip install -r requirements.txt
+      startCommand: uvicorn asgi:app --host 0.0.0.0 --port $PORT                                                                 
+      healthCheckPath: /health                                                                                                   
+      envVars:
+        - key: MCP_TRANSPORT                                                                                                     
+          value: streamable-http
+        - key: MCP_DISABLE_DNS_REBINDING_PROTECTION
+          value: "true"                                                                                                          
+        - key: JAVA_HOME
+          value: /usr/lib/jvm/java-21-openjdk-amd64                                                                              
+        - key: PATH                                                                                                              
+          value: /usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+          
