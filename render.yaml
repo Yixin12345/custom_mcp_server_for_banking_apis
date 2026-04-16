@@ -5,8 +5,8 @@ services:
       plan: free
       buildCommand: >-                                                                                                           
         apt-get update -q &&
-        apt-get install -y openjdk-21-jdk wget gnupg ca-certificates &&
-        export JAVA_HOME=/usr/lib/jvm/java-21-openjdk-amd64 &&
+        apt-get install -y openjdk-17-jdk wget gnupg ca-certificates &&
+        export JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64 &&
         export PATH=$JAVA_HOME/bin:$PATH &&                                                                                      
         wget -q -O /tmp/chrome.deb https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb &&
         apt-get install -y /tmp/chrome.deb &&                                                                                    
@@ -19,7 +19,7 @@ services:
         - key: MCP_DISABLE_DNS_REBINDING_PROTECTION
           value: "true"                                                                                                          
         - key: JAVA_HOME
-          value: /usr/lib/jvm/java-21-openjdk-amd64                                                                              
+          value: /usr/lib/jvm/java-17-openjdk-amd64                                                                              
         - key: PATH                                                                                                              
-          value: /usr/lib/jvm/java-21-openjdk-amd64/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+          value: /usr/lib/jvm/java-17-openjdk-amd64/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
           

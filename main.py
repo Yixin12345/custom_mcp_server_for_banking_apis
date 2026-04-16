@@ -398,7 +398,7 @@ async def _run_automation_maven_tests(
         command.append(f"-Dcucumber.filter.tags={cucumber_tags.strip()}")
 
     proc_env = os.environ.copy()
-    java_home = proc_env.get("JAVA_HOME", "/usr/lib/jvm/java-21-openjdk-amd64")
+    java_home = proc_env.get("JAVA_HOME", "/usr/lib/jvm/java-17-openjdk-amd64")
     proc_env["JAVA_HOME"] = java_home
     java_bin = os.path.join(java_home, "bin")
     if java_bin not in proc_env.get("PATH", ""):
