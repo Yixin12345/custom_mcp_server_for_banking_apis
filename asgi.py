@@ -41,27 +41,6 @@ class MCPAuthMiddleware(BaseHTTPMiddleware):
 logger = logging.getLogger(__name__)
 
 
-def _ensure_java() -> None:
-    try:
-        result = subprocess.run(["java", "-version"], capture_output=True, text=True)
-        if result.returncode == 0:
-            logger.info("Java already available")
-            return
-    except FileNotFoundError:
-        pass
-    try:
-        result = subprocess.run(
-            ["apt-get", "install", "-y", "--no-install-recommends", "openjdk-17-jdk-headless"],
-            capture_output=True, text=True, timeout=300,
-        )
-        if result.returncode == 0:
-            logger.info("Java installed at startup")
-        else:
-            logger.warning("apt-get java install exited %d: %s", result.returncode, result.stderr[:500])
-    except Exception as exc:
-        logger.warning("Could not install Java: %s", exc)
-
-
 def _ensure_playwright_browsers() -> None:
     try:
         result = subprocess.run(
@@ -78,7 +57,6 @@ def _ensure_playwright_browsers() -> None:
 
 @asynccontextmanager
 async def lifespan(_: Starlette):
-    _ensure_java()
     _ensure_playwright_browsers()
     async with mcp.session_manager.run():
         try:
