@@ -453,7 +453,7 @@ async def _run_automation_maven_tests(
         command.append(f"-Dcucumber.filter.tags={cucumber_tags.strip()}")
 
     proc_env = os.environ.copy()
-    if not proc_env.get("JAVA_HOME") or not Path(proc_env["JAVA_HOME"]).is_dir():
+    if not (Path(proc_env.get("JAVA_HOME", "")) / "bin" / "java").is_file():
         # Derive JAVA_HOME from the real path of the java binary
         java_binary = shutil.which("java")
         if java_binary:
