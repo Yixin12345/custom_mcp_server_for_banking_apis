@@ -5,6 +5,8 @@ services:
       plan: free
       buildCommand: >-
         pip install -r requirements.txt &&
+        playwright install chromium &&
+        playwright install-deps chromium &&
         mkdir -p /opt/render/project/src/.jdk &&
         wget -q -O /tmp/jdk17.tar.gz "https://api.adoptium.net/v3/binary/latest/17/ga/linux/x64/jdk/hotspot/normal/eclipse" &&
         tar -xzf /tmp/jdk17.tar.gz -C /opt/render/project/src/.jdk --strip-components=1

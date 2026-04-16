@@ -12,6 +12,7 @@ from typing import Annotated
 from fastapi import HTTPException
 from mcp.server.fastmcp import FastMCP
 from observability import telemetry
+from playwright.async_api import async_playwright, expect
 from fastapi_app.app import (
     create_customer as _fastapi_create_customer,
     get_customer as _fastapi_get_customer,
@@ -310,6 +311,60 @@ async def deposit_tool(
     return await telemetry.observe_tool_call(
         tool_name="deposit",
         tool_input={"customer_id": customer_id, "account_id": account_id, "amount": amount},
+        runner=_runner,
+    )
+
+
+XYZ_BANK_URL = "https://www.globalsqa.com/angularJs-protractor/BankingProject/"
+XYZ_BANK_USER = "Hermoine Granger"
+
+
+@mcp.tool("run_xyz_bank_deposit", description="Execute the XYZ Bank deposit workflow using Playwright on the server: login as Hermoine Granger and deposit money.")
+async def run_xyz_bank_deposit_tool(
+    deposit_amount: Annotated[int, "Amount to deposit (default 200)"] = 200,
+) -> str:
+    async def _runner() -> str:
+        try:
+            async with async_playwright() as pw:
+                browser = await pw.chromium.launch(headless=True)
+                page = await browser.new_page()
+
+                await page.goto(XYZ_BANK_URL, wait_until="domcontentloaded")
+                await page.get_by_role("button", name="Customer Login").click()
+                await page.locator("#userSelect").select_option(label=XYZ_BANK_USER)
+                await page.get_by_role("button", name="Login").click()
+                await page.get_by_role("button", name="Deposit").wait_for()
+
+                starting_balance = int((await page.locator("div.center strong").nth(1).inner_text()).strip())
+
+                await page.get_by_role("button", name="Deposit").click()
+                amount_input = page.locator("input[ng-model='amount']")
+                await amount_input.wait_for()
+                await amount_input.fill(str(deposit_amount))
+                await page.get_by_role("form").get_by_role("button", name="Deposit").click()
+
+                success = page.locator("span.error")
+                await expect(success).to_have_text("Deposit Successful")
+                await expect(page.locator("div.center strong").nth(1)).to_have_text(str(starting_balance + deposit_amount))
+
+                message = await success.inner_text()
+                ending_balance = int((await page.locator("div.center strong").nth(1).inner_text()).strip())
+
+                await browser.close()
+
+            return _with_next_action(json.dumps({
+                "customer": XYZ_BANK_USER,
+                "starting_balance": starting_balance,
+                "deposited_amount": deposit_amount,
+                "ending_balance": ending_balance,
+                "message": message,
+            }, indent=2))
+        except Exception as e:
+            return _with_next_action(json.dumps({"error": "Failed to run XYZ bank deposit", "details": str(e)}, indent=2))
+
+    return await telemetry.observe_tool_call(
+        tool_name="run_xyz_bank_deposit",
+        tool_input={"deposit_amount": deposit_amount},
         runner=_runner,
     )
 
