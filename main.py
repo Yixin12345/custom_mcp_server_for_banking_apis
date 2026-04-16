@@ -398,9 +398,25 @@ async def _run_automation_maven_tests(
         command.append(f"-Dcucumber.filter.tags={cucumber_tags.strip()}")
 
     proc_env = os.environ.copy()
-    java_home = proc_env.get("JAVA_HOME", "/usr/lib/jvm/java-17-openjdk-amd64")
-    proc_env["JAVA_HOME"] = java_home
-    java_bin = os.path.join(java_home, "bin")
+    if not proc_env.get("JAVA_HOME") or not Path(proc_env["JAVA_HOME"]).is_dir():
+        # Derive JAVA_HOME from the real path of the java binary
+        java_binary = shutil.which("java")
+        if java_binary:
+            java_home = str(Path(os.path.realpath(java_binary)).parent.parent)
+        else:
+            # Last-resort: scan known install locations
+            for candidate in [
+                "/usr/lib/jvm/java-17-openjdk-amd64",
+                "/usr/lib/jvm/java-21-openjdk-amd64",
+                "/usr/lib/jvm/java-11-openjdk-amd64",
+            ]:
+                if Path(candidate).is_dir():
+                    java_home = candidate
+                    break
+            else:
+                java_home = "/usr/lib/jvm/java-17-openjdk-amd64"
+        proc_env["JAVA_HOME"] = java_home
+    java_bin = os.path.join(proc_env["JAVA_HOME"], "bin")
     if java_bin not in proc_env.get("PATH", ""):
         proc_env["PATH"] = java_bin + ":" + proc_env.get("PATH", "")
 
