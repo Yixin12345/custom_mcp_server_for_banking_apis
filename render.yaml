@@ -9,22 +9,13 @@ services:
       PLAYWRIGHT_BROWSERS_PATH=/opt/render/project/src/.playwright playwright install chromium &&
       PLAYWRIGHT_BROWSERS_PATH=/opt/render/project/src/.playwright playwright install-deps chromium
 
-    startCommand: >
-      apt-get update -q &&
-      apt-get install -y openjdk-21-jdk &&
-      export JAVA_HOME=/usr/lib/jvm/java-21-openjdk-amd64 &&
-      export PATH=$JAVA_HOME/bin:$PATH &&
-      java -version &&
-      uvicorn asgi:app --host 0.0.0.0 --port $PORT
+    startCommand: uvicorn asgi:app --host 0.0.0.0 --port $PORT
 
     healthCheckPath: /health
 
     envVars:
       - key: PLAYWRIGHT_BROWSERS_PATH
         value: /opt/render/project/src/.playwright
-
-      - key: JAVA_HOME
-        value: /usr/lib/jvm/java-21-openjdk-amd64
 
       - key: MCP_TRANSPORT
         value: streamable-http
