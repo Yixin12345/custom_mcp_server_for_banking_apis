@@ -4,10 +4,11 @@ services:
       env: python
       plan: free
       buildCommand: >-
+        apt-get update -q &&
+        apt-get install -y openjdk-17-jdk &&
         pip install -r requirements.txt &&
         PLAYWRIGHT_BROWSERS_PATH=/opt/render/project/src/.playwright playwright install chromium &&
         PLAYWRIGHT_BROWSERS_PATH=/opt/render/project/src/.playwright playwright install-deps chromium &&
-        apt-get install -y --no-install-recommends openjdk-17-jdk-headless &&
         java -version
       startCommand: uvicorn asgi:app --host 0.0.0.0 --port $PORT
       healthCheckPath: /health
