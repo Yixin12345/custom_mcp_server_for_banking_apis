@@ -466,7 +466,7 @@ async def _run_automation_maven_tests(
                 "/usr/lib/jvm/java-21-openjdk-amd64",
                 "/usr/lib/jvm/java-11-openjdk-amd64",
             ]:
-                if Path(candidate).is_dir():
+                if (Path(candidate) / "bin" / "java").is_file():
                     java_home = candidate
                     break
             else:
