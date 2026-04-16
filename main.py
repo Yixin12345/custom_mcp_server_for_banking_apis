@@ -453,13 +453,23 @@ async def _run_automation_maven_tests(
         command.append(f"-Dcucumber.filter.tags={cucumber_tags.strip()}")
 
     proc_env = os.environ.copy()
+
+    # Diagnostics — surface what the runtime actually sees
+    which_java = shutil.which("java") or "not found"
+    env_java_home = proc_env.get("JAVA_HOME", "not set")
+    jvm_dirs = []
+    for d in ["/usr/lib/jvm", "/usr/local/lib/jvm"]:
+        try:
+            jvm_dirs = [str(p) for p in Path(d).iterdir()]
+        except FileNotFoundError:
+            pass
+    java_diag = {"which_java": which_java, "env_JAVA_HOME": env_java_home, "jvm_dirs": jvm_dirs}
+
     if not (Path(proc_env.get("JAVA_HOME", "")) / "bin" / "java").is_file():
-        # Derive JAVA_HOME from the real path of the java binary
         java_binary = shutil.which("java")
         if java_binary:
             java_home = str(Path(os.path.realpath(java_binary)).parent.parent)
         else:
-            # Last-resort: scan known install locations
             for candidate in [
                 "/opt/render/project/src/.jdk",
                 "/usr/lib/jvm/java-17-openjdk-amd64",
@@ -497,6 +507,7 @@ async def _run_automation_maven_tests(
                 "duration_seconds": duration_seconds,
                 "working_directory": AUTOMATION_MVN_TESTS_DIR.as_posix(),
                 "command": command,
+                "java_diag": java_diag,
                 "reports": _collect_report_paths(),
                 "stdout_tail": _tail_output(completed.stdout or "", max_output_chars),
                 "stderr_tail": _tail_output(completed.stderr or "", max_output_chars),
