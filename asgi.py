@@ -2,7 +2,9 @@
 
 from contextlib import asynccontextmanager
 import hmac
+import logging
 import os
+import subprocess
 
 from starlette.applications import Starlette
 from starlette.middleware.base import BaseHTTPMiddleware
@@ -36,8 +38,26 @@ class MCPAuthMiddleware(BaseHTTPMiddleware):
         return await call_next(request)
 
 
+logger = logging.getLogger(__name__)
+
+
+def _ensure_playwright_browsers() -> None:
+    try:
+        result = subprocess.run(
+            ["playwright", "install", "chromium"],
+            capture_output=True, text=True, timeout=120,
+        )
+        if result.returncode == 0:
+            logger.info("Playwright browsers ready")
+        else:
+            logger.warning("playwright install exited %d: %s", result.returncode, result.stderr[:500])
+    except Exception as exc:
+        logger.warning("Could not install Playwright browsers: %s", exc)
+
+
 @asynccontextmanager
 async def lifespan(_: Starlette):
+    _ensure_playwright_browsers()
     async with mcp.session_manager.run():
         try:
             yield
