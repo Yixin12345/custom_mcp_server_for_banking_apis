@@ -406,6 +406,7 @@ async def _run_automation_maven_tests(
         else:
             # Last-resort: scan known install locations
             for candidate in [
+                "/opt/render/project/src/.jdk",
                 "/usr/lib/jvm/java-17-openjdk-amd64",
                 "/usr/lib/jvm/java-21-openjdk-amd64",
                 "/usr/lib/jvm/java-11-openjdk-amd64",

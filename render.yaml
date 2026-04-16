@@ -1,25 +1,21 @@
-services:       
+services:
     - type: web
       name: new-api-mcp
-      env: python                                                                                                                
+      env: python
       plan: free
-      buildCommand: >-                                                                                                           
-        apt-get update -q &&
-        apt-get install -y openjdk-17-jdk wget gnupg ca-certificates &&
-        export JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64 &&
-        export PATH=$JAVA_HOME/bin:$PATH &&                                                                                      
-        wget -q -O /tmp/chrome.deb https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb &&
-        apt-get install -y /tmp/chrome.deb &&                                                                                    
-        pip install -r requirements.txt
-      startCommand: uvicorn asgi:app --host 0.0.0.0 --port $PORT                                                                 
-      healthCheckPath: /health                                                                                                   
+      buildCommand: >-
+        pip install -r requirements.txt &&
+        mkdir -p /opt/render/project/src/.jdk &&
+        wget -q -O /tmp/jdk17.tar.gz "https://api.adoptium.net/v3/binary/latest/17/ga/linux/x64/jdk/hotspot/normal/eclipse" &&
+        tar -xzf /tmp/jdk17.tar.gz -C /opt/render/project/src/.jdk --strip-components=1
+      startCommand: uvicorn asgi:app --host 0.0.0.0 --port $PORT
+      healthCheckPath: /health
       envVars:
-        - key: MCP_TRANSPORT                                                                                                     
+        - key: MCP_TRANSPORT
           value: streamable-http
         - key: MCP_DISABLE_DNS_REBINDING_PROTECTION
-          value: "true"                                                                                                          
+          value: "true"
         - key: JAVA_HOME
-          value: /usr/lib/jvm/java-17-openjdk-amd64                                                                              
-        - key: PATH                                                                                                              
-          value: /usr/lib/jvm/java-17-openjdk-amd64/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
-          
+          value: /opt/render/project/src/.jdk
+        - key: PATH
+          value: /opt/render/project/src/.jdk/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
