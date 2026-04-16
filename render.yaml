@@ -5,14 +5,16 @@ services:
       plan: free
       buildCommand: >-
         pip install -r requirements.txt &&
-        playwright install chromium &&
-        playwright install-deps chromium &&
+        PLAYWRIGHT_BROWSERS_PATH=/opt/render/project/src/.playwright playwright install chromium &&
+        PLAYWRIGHT_BROWSERS_PATH=/opt/render/project/src/.playwright playwright install-deps chromium &&
         mkdir -p /opt/render/project/src/.jdk &&
         wget -q -O /tmp/jdk17.tar.gz "https://api.adoptium.net/v3/binary/latest/17/ga/linux/x64/jdk/hotspot/normal/eclipse" &&
         tar -xzf /tmp/jdk17.tar.gz -C /opt/render/project/src/.jdk --strip-components=1
       startCommand: uvicorn asgi:app --host 0.0.0.0 --port $PORT
       healthCheckPath: /health
       envVars:
+        - key: PLAYWRIGHT_BROWSERS_PATH
+          value: /opt/render/project/src/.playwright
         - key: MCP_TRANSPORT
           value: streamable-http
         - key: MCP_DISABLE_DNS_REBINDING_PROTECTION
