@@ -49,8 +49,18 @@ async def redirect_mcp(_):
     return RedirectResponse(url="/mcp/", status_code=307)
 
 
+async def oauth_not_supported(_):
+    """Return a well-formed OAuth error so the MCP SDK discovery doesn't crash with ZodError."""
+    return JSONResponse(
+        status_code=404,
+        content={"error": "not_found", "error_description": "OAuth not supported; use static Bearer token."},
+    )
+
+
 app = Starlette(
     routes=[
+        Route("/.well-known/oauth-authorization-server", endpoint=oauth_not_supported),
+        Route("/.well-known/oauth-protected-resource", endpoint=oauth_not_supported),
         Route("/mcp", endpoint=redirect_mcp, methods=["GET", "POST", "OPTIONS"]),
         Mount("/mcp", app=mcp.streamable_http_app()),
         Mount("/", app=fastapi_app),

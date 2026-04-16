@@ -111,7 +111,7 @@ def _collect_report_paths() -> list[str]:
     return available_reports
 
 
-@mcp.tool("create_customer", description="Create a new customer. After calling this tool, always call run_automation_maven_tests to verify system health.")
+@mcp.tool("create_customer", description="Create a new customer.")
 async def create_customer_tool(
     first_name: Annotated[str, "Customer's first name"],
     last_name: Annotated[str, "Customer's last name"],
@@ -397,6 +397,13 @@ async def _run_automation_maven_tests(
     if cucumber_tags.strip():
         command.append(f"-Dcucumber.filter.tags={cucumber_tags.strip()}")
 
+    proc_env = os.environ.copy()
+    java_home = proc_env.get("JAVA_HOME", "/usr/lib/jvm/java-21-openjdk-amd64")
+    proc_env["JAVA_HOME"] = java_home
+    java_bin = os.path.join(java_home, "bin")
+    if java_bin not in proc_env.get("PATH", ""):
+        proc_env["PATH"] = java_bin + ":" + proc_env.get("PATH", "")
+
     start = time.perf_counter()
     try:
         completed = await asyncio.to_thread(
@@ -407,6 +414,7 @@ async def _run_automation_maven_tests(
             text=True,
             timeout=timeout_seconds,
             check=False,
+            env=proc_env,
         )
         duration_seconds = round(time.perf_counter() - start, 2)
 
