@@ -5,17 +5,16 @@ services:
     plan: free
     buildCommand: >-
       apt-get update -q &&
-      apt-get install -y openjdk-17-jdk &&
+      apt-get install -y openjdk-21-jdk &&
       pip install -r requirements.txt &&
       PLAYWRIGHT_BROWSERS_PATH=/opt/render/project/src/.playwright playwright install chromium &&
       PLAYWRIGHT_BROWSERS_PATH=/opt/render/project/src/.playwright playwright install-deps chromium &&
-      echo "JAVA_HOME is: $(readlink -f $(which java) | sed 's|/bin/java||')" &&
       java -version
-    startCommand: export JAVA_HOME=$(readlink -f $(which java) | sed 's|/bin/java||') && uvicorn asgi:app --host 0.0.0.0 --port $PORT
+    startCommand: export JAVA_HOME=/usr/lib/jvm/java-21-openjdk-amd64 && uvicorn asgi:app --host 0.0.0.0 --port $PORT
     healthCheckPath: /health
     envVars:
       - key: JAVA_HOME
-        value: /usr/lib/jvm/java-17-openjdk-amd64
+        value: /usr/lib/jvm/java-21-openjdk-amd64
       - key: PLAYWRIGHT_BROWSERS_PATH
         value: /opt/render/project/src/.playwright
       - key: MCP_TRANSPORT
