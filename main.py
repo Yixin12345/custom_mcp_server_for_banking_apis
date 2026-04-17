@@ -7,9 +7,10 @@ from pathlib import Path
 import shutil
 import time
 from typing import Annotated
+import uuid
 
 from fastapi import HTTPException
-from mcp.server.fastmcp import Context, FastMCP
+from mcp.server.fastmcp import FastMCP
 from observability import telemetry
 from playwright.async_api import async_playwright, expect
 from fastapi_app.app import (
@@ -32,6 +33,9 @@ ALLOWED_MAVEN_GOALS = {"test", "verify"}
 
 
 NEXT_ACTION_REMINDER = "You MUST call run_automation_maven_tests now to verify system health before proceeding."
+
+# In-memory job store for async Maven test runs
+_JOBS: dict[str, dict] = {}
 
 
 def _with_next_action(result_json: str) -> str:
@@ -368,29 +372,60 @@ async def run_xyz_bank_deposit_tool(
     )
 
 
-@mcp.tool("run_automation_maven_tests", description="Run Maven/TestNG automation tests in automation_mvn_tests")
+@mcp.tool(
+    "run_automation_maven_tests",
+    description=(
+        "Start Maven/TestNG automation tests in the background. Returns a job_id immediately. "
+        "You MUST then call get_maven_test_result with that job_id (poll every 15s) until status is 'success' or 'failed'."
+    ),
+)
 async def run_automation_maven_tests_tool(
     maven_goal: Annotated[str, "Maven goal to run: test or verify"] = "test",
     clean_first: Annotated[bool, "Run clean before the selected goal"] = False,
     testng_suite: Annotated[str, "Relative path to TestNG suite XML"] = "src/test/resources/testng.xml",
     cucumber_tags: Annotated[str, "Optional Cucumber tags expression (e.g. @login)"] = "",
     max_output_chars: Annotated[int, "Max stdout/stderr chars to return"] = 8000,
-    ctx: Context = None,
 ) -> str:
-    """Execute Maven automation tests and return structured results."""
-    return await telemetry.observe_tool_call(
-        tool_name="run_automation_maven_tests",
-        tool_input={
-            "maven_goal": maven_goal,
-            "clean_first": clean_first,
-            "testng_suite": testng_suite,
-            "cucumber_tags": cucumber_tags,
-            "max_output_chars": max_output_chars,
+    """Fire off Maven tests in the background and return a job_id to poll."""
+    job_id = str(uuid.uuid4())
+    _JOBS[job_id] = {"status": "running", "started_at": time.time()}
+
+    async def _bg():
+        result_str = await _run_automation_maven_tests(
+            maven_goal, clean_first, testng_suite, cucumber_tags, max_output_chars
+        )
+        try:
+            result = json.loads(result_str)
+        except json.JSONDecodeError:
+            result = {"raw": result_str}
+        _JOBS[job_id].update({"status": result.get("status", "completed"), "result": result})
+
+    asyncio.create_task(_bg())
+    return json.dumps(
+        {
+            "job_id": job_id,
+            "status": "running",
+            "next_required_action": "Call get_maven_test_result with this job_id every 15 seconds until status is 'success' or 'failed'.",
         },
-        runner=lambda: _run_automation_maven_tests(
-            maven_goal, clean_first, testng_suite, cucumber_tags, max_output_chars, ctx
-        ),
+        indent=2,
     )
+
+
+@mcp.tool("get_maven_test_result", description="Poll the result of a background Maven test run by job_id.")
+async def get_maven_test_result_tool(
+    job_id: Annotated[str, "The job_id returned by run_automation_maven_tests"],
+) -> str:
+    """Return the current status or final result of a Maven test job."""
+    job = _JOBS.get(job_id)
+    if job is None:
+        return json.dumps({"status": "not_found", "job_id": job_id}, indent=2)
+    if job["status"] == "running":
+        elapsed = round(time.time() - job["started_at"], 1)
+        return json.dumps({"job_id": job_id, "status": "running", "elapsed_seconds": elapsed}, indent=2)
+    # Completed — return full result and clean up
+    result = dict(job)
+    _JOBS.pop(job_id, None)
+    return json.dumps({"job_id": job_id, **result}, indent=2)
 
 
 async def _run_automation_maven_tests(
@@ -399,7 +434,6 @@ async def _run_automation_maven_tests(
     testng_suite: str,
     cucumber_tags: str,
     max_output_chars: int,
-    ctx: Context | None = None,
 ) -> str:
     if not AUTOMATION_MVN_TESTS_DIR.is_dir():
         return json.dumps(
@@ -495,19 +529,13 @@ async def _run_automation_maven_tests(
             env=proc_env,
         )
 
-        async def _read_stream(stream: asyncio.StreamReader, buf: list[str], label: str) -> None:
+        async def _read_stream(stream: asyncio.StreamReader, buf: list[str]) -> None:
             async for raw in stream:
-                line = raw.decode(errors="replace").rstrip()
-                buf.append(line)
-                if ctx is not None:
-                    try:
-                        await ctx.info(f"[maven/{label}] {line}")
-                    except Exception:
-                        pass
+                buf.append(raw.decode(errors="replace").rstrip())
 
         await asyncio.gather(
-            _read_stream(proc.stdout, stdout_lines, "out"),
-            _read_stream(proc.stderr, stderr_lines, "err"),
+            _read_stream(proc.stdout, stdout_lines),
+            _read_stream(proc.stderr, stderr_lines),
             proc.wait(),
         )
 
