@@ -5,12 +5,11 @@ import json
 import os
 from pathlib import Path
 import shutil
-import subprocess
 import time
 from typing import Annotated
 
 from fastapi import HTTPException
-from mcp.server.fastmcp import FastMCP
+from mcp.server.fastmcp import Context, FastMCP
 from observability import telemetry
 from playwright.async_api import async_playwright, expect
 from fastapi_app.app import (
@@ -377,6 +376,7 @@ async def run_automation_maven_tests_tool(
     cucumber_tags: Annotated[str, "Optional Cucumber tags expression (e.g. @login)"] = "",
     timeout_seconds: Annotated[int, "Command timeout in seconds"] = 900,
     max_output_chars: Annotated[int, "Max stdout/stderr chars to return"] = 8000,
+    ctx: Context = None,
 ) -> str:
     """Execute Maven automation tests and return structured results."""
     return await telemetry.observe_tool_call(
@@ -390,7 +390,7 @@ async def run_automation_maven_tests_tool(
             "max_output_chars": max_output_chars,
         },
         runner=lambda: _run_automation_maven_tests(
-            maven_goal, clean_first, testng_suite, cucumber_tags, timeout_seconds, max_output_chars
+            maven_goal, clean_first, testng_suite, cucumber_tags, timeout_seconds, max_output_chars, ctx
         ),
     )
 
@@ -402,6 +402,7 @@ async def _run_automation_maven_tests(
     cucumber_tags: str,
     timeout_seconds: int,
     max_output_chars: int,
+    ctx: Context | None = None,
 ) -> str:
     if not AUTOMATION_MVN_TESTS_DIR.is_dir():
         return json.dumps(
@@ -487,44 +488,65 @@ async def _run_automation_maven_tests(
         proc_env["PATH"] = java_bin + ":" + proc_env.get("PATH", "")
 
     start = time.perf_counter()
+    stdout_lines: list[str] = []
+    stderr_lines: list[str] = []
     try:
-        completed = await asyncio.to_thread(
-            subprocess.run,
-            command,
+        proc = await asyncio.create_subprocess_exec(
+            *command,
             cwd=str(AUTOMATION_MVN_TESTS_DIR),
-            capture_output=True,
-            text=True,
-            timeout=timeout_seconds,
-            check=False,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
             env=proc_env,
         )
-        duration_seconds = round(time.perf_counter() - start, 2)
 
+        async def _read_stream(stream: asyncio.StreamReader, buf: list[str], label: str) -> None:
+            async for raw in stream:
+                line = raw.decode(errors="replace").rstrip()
+                buf.append(line)
+                if ctx is not None:
+                    try:
+                        await ctx.info(f"[maven/{label}] {line}")
+                    except Exception:
+                        pass
+
+        try:
+            await asyncio.wait_for(
+                asyncio.gather(
+                    _read_stream(proc.stdout, stdout_lines, "out"),
+                    _read_stream(proc.stderr, stderr_lines, "err"),
+                    proc.wait(),
+                ),
+                timeout=timeout_seconds,
+            )
+        except asyncio.TimeoutError:
+            proc.kill()
+            await proc.wait()
+            duration_seconds = round(time.perf_counter() - start, 2)
+            return json.dumps(
+                {
+                    "status": "timeout",
+                    "error": f"Maven command exceeded timeout of {timeout_seconds} seconds",
+                    "duration_seconds": duration_seconds,
+                    "working_directory": AUTOMATION_MVN_TESTS_DIR.as_posix(),
+                    "command": command,
+                    "stdout_tail": _tail_output("\n".join(stdout_lines), max_output_chars),
+                    "stderr_tail": _tail_output("\n".join(stderr_lines), max_output_chars),
+                },
+                indent=2,
+            )
+
+        duration_seconds = round(time.perf_counter() - start, 2)
         return json.dumps(
             {
-                "status": "success" if completed.returncode == 0 else "failed",
-                "return_code": completed.returncode,
+                "status": "success" if proc.returncode == 0 else "failed",
+                "return_code": proc.returncode,
                 "duration_seconds": duration_seconds,
                 "working_directory": AUTOMATION_MVN_TESTS_DIR.as_posix(),
                 "command": command,
                 "java_diag": java_diag,
                 "reports": _collect_report_paths(),
-                "stdout_tail": _tail_output(completed.stdout or "", max_output_chars),
-                "stderr_tail": _tail_output(completed.stderr or "", max_output_chars),
-            },
-            indent=2,
-        )
-    except subprocess.TimeoutExpired as e:
-        duration_seconds = round(time.perf_counter() - start, 2)
-        return json.dumps(
-            {
-                "status": "timeout",
-                "error": f"Maven command exceeded timeout of {timeout_seconds} seconds",
-                "duration_seconds": duration_seconds,
-                "working_directory": AUTOMATION_MVN_TESTS_DIR.as_posix(),
-                "command": command,
-                "stdout_tail": _tail_output(_normalize_stream(e.stdout), max_output_chars),
-                "stderr_tail": _tail_output(_normalize_stream(e.stderr), max_output_chars),
+                "stdout_tail": _tail_output("\n".join(stdout_lines), max_output_chars),
+                "stderr_tail": _tail_output("\n".join(stderr_lines), max_output_chars),
             },
             indent=2,
         )
