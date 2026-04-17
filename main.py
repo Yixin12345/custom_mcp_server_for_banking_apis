@@ -374,7 +374,6 @@ async def run_automation_maven_tests_tool(
     clean_first: Annotated[bool, "Run clean before the selected goal"] = False,
     testng_suite: Annotated[str, "Relative path to TestNG suite XML"] = "src/test/resources/testng.xml",
     cucumber_tags: Annotated[str, "Optional Cucumber tags expression (e.g. @login)"] = "",
-    timeout_seconds: Annotated[int, "Command timeout in seconds"] = 900,
     max_output_chars: Annotated[int, "Max stdout/stderr chars to return"] = 8000,
     ctx: Context = None,
 ) -> str:
@@ -386,11 +385,10 @@ async def run_automation_maven_tests_tool(
             "clean_first": clean_first,
             "testng_suite": testng_suite,
             "cucumber_tags": cucumber_tags,
-            "timeout_seconds": timeout_seconds,
             "max_output_chars": max_output_chars,
         },
         runner=lambda: _run_automation_maven_tests(
-            maven_goal, clean_first, testng_suite, cucumber_tags, timeout_seconds, max_output_chars, ctx
+            maven_goal, clean_first, testng_suite, cucumber_tags, max_output_chars, ctx
         ),
     )
 
@@ -400,7 +398,6 @@ async def _run_automation_maven_tests(
     clean_first: bool,
     testng_suite: str,
     cucumber_tags: str,
-    timeout_seconds: int,
     max_output_chars: int,
     ctx: Context | None = None,
 ) -> str:
@@ -424,7 +421,6 @@ async def _run_automation_maven_tests(
             indent=2,
         )
 
-    timeout_seconds = max(60, min(timeout_seconds, 3600))
     max_output_chars = max(1000, min(max_output_chars, 20000))
 
     try:
@@ -509,31 +505,11 @@ async def _run_automation_maven_tests(
                     except Exception:
                         pass
 
-        try:
-            await asyncio.wait_for(
-                asyncio.gather(
-                    _read_stream(proc.stdout, stdout_lines, "out"),
-                    _read_stream(proc.stderr, stderr_lines, "err"),
-                    proc.wait(),
-                ),
-                timeout=timeout_seconds,
-            )
-        except asyncio.TimeoutError:
-            proc.kill()
-            await proc.wait()
-            duration_seconds = round(time.perf_counter() - start, 2)
-            return json.dumps(
-                {
-                    "status": "timeout",
-                    "error": f"Maven command exceeded timeout of {timeout_seconds} seconds",
-                    "duration_seconds": duration_seconds,
-                    "working_directory": AUTOMATION_MVN_TESTS_DIR.as_posix(),
-                    "command": command,
-                    "stdout_tail": _tail_output("\n".join(stdout_lines), max_output_chars),
-                    "stderr_tail": _tail_output("\n".join(stderr_lines), max_output_chars),
-                },
-                indent=2,
-            )
+        await asyncio.gather(
+            _read_stream(proc.stdout, stdout_lines, "out"),
+            _read_stream(proc.stderr, stderr_lines, "err"),
+            proc.wait(),
+        )
 
         duration_seconds = round(time.perf_counter() - start, 2)
         return json.dumps(
